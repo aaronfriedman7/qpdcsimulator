@@ -27,38 +27,11 @@ os.chdir(workpath)
 # In general, all file loading try statements should only accept particular exceptions. But these have been tested.
 
 # convenient file label string
-def fhead(params,st):
-    return "L{0}_pd{1}_wid{2}_K1_{3}_K2_{4}_J{5}_B{6}_rsd{7}_st{8}".format(params.L,params.pd,params.wid,params.K1,params.K2,params.J,params.B,params.rsd,st)
+def fhead(params,rsd,st):
+    return "L{0}_pd{1}_wid{2}_K1_{3}_K2_{4}_J{5}_B{6}_rsd{7}_st{8}".format(params.L,params.pd,params.wid,params.K1,params.K2,params.J,params.B,rsd,st)
 
-def fhead2(params,st):
-    return "L{0}_pd{1}_wid{2}_K1_{3}_K2_{4}_rsd{5}_st{6}".format(params.L,params.pd,params.wid,params.K1,params.K2,params.rsd,st)
-
-def jobhead(params):
-    return "L{0}_pd{1}_wid{2}_K1_{3}_K2_{4}_J{5}_B{6}_rsd{7}".format(params.L,params.pd,params.wid,params.K1,params.K2,params.J,params.B,params.rsd)
-
-def jobhead2(params):
-    return "L{0}_pd{1}_wid{2}_K1_{3}_K2_{4}_rsd{5}".format(params.L,params.pd,params.wid,params.K1,params.K2,params.rsd)
- 
-# returns array of integers corresponding to state indices
-def todolist(params):
-    try:
-        todo = np.load(workpath+"todo_{0}.npy".format(jobhead2(params)))
-        if len(todo) == params.nst:
-            return todo
-        elif len(todo) > params.nst:
-            return todo[:params.nst]
-        else:
-            todo_temp = todo.tolist()
-            choices = np.array(sorted([dummy for dummy in range(5,4**(params.L)-5) if dummy not in todo_temp],key=int))
-            todo_temp.extend((np.random.choice(choices,params.nst-len(todo_temp),replace=False)).tolist())
-            todo = np.array(todo_temp)
-            np.save(workpath+"todo_{0}.npy".format(jobhead2(params)),todo)
-            return todo
-    except (FileNotFoundError, IOError, EOFError) as err:
-        print("{0} -- could not load to do file, making now".format(err))
-        todo = np.random.choice(np.arange(5,4**(params.L)-5,dtype='i'),params.nst,replace=False)
-        np.save(workpath+"todo_{0}.npy".format(jobhead2(params)),todo)
-        return todo
+def jobhead(params,rsd):
+    return "L{0}_pd{1}_wid{2}_K1_{3}_K2_{4}_J{5}_B{6}_rsd{7}".format(params.L,params.pd,params.wid,params.K1,params.K2,params.J,params.B,rsd)
 
 # the 0.5 shift should compensate for phase shift (for x pulses), should we also include half-odd multiples of golden?
 def timeslist(tmax,every):
@@ -75,19 +48,19 @@ def timeslist(tmax,every):
         vals.remove(vals[-1])
     while vals[0] < 0.0:
         vals.remove(vals[0])
-    vals.extend([every*foo for foo in range(int(np.ceil(float(tmax)/every))+1)])
+    vals.extend([every*foo for foo in range(int(np.ceil(float(tmax)/every))+2)])
     return sorted(list(set(vals)),key=float)
 
 # PHYSICS 
     
-# the two functions below are inverses.
+## the two functions below are inverses.
 def spinstr(spinint, N):
     return bin(int(spinint))[2:].zfill(N)
 
 def getint(N,config):
     return int(config.zfill(N),base=2)
 
-# confirmed, save as array
+### confirmed, save as array
 def Zop(params,j=0):
     Lcell = params.L
     try:
@@ -101,7 +74,7 @@ def Zop(params,j=0):
         np.save(workpath+"Z_L{0}_j{1}.npy".format(Lcell,j),op)
     return op
 
-# confirmed save as array
+### confirmed save as array
 def Xop(params,j=0):
     Lcell = params.L
     try:
@@ -116,16 +89,14 @@ def Xop(params,j=0):
         ss.save_npz(workpath+"X_L{0}_j{1}.npz".format(Lcell,j),op)
     return op
 
-
 # PROBLEM SPECIFIC
 
 # Gaussian pulse, a la Brayden
-def pulse_func(time,omega,stddev,accuracy=10.0**(-8.0),giveup=2000,mintry=25):
+def pulse_func(time,omega,stddev,accuracy=10.0**(-8.0),giveup=1000,mintry=25):
     f = 0.5*omega
     m = 1
     goodjob = 0
     while m <= giveup:
-        # newterm = omega*np.exp(-0.5*((omega*stddev*m)**2))*np.cos(m*omega*time+m*np.pi)
         newterm = omega*np.exp(-0.5*((omega*stddev*m)**2))*np.cos(m*omega*time+m*np.pi)
         f += newterm
         m += 1
@@ -143,33 +114,32 @@ def pulse_func(time,omega,stddev,accuracy=10.0**(-8.0),giveup=2000,mintry=25):
     return f
 
 # all static terms, saves to work path to avoid delay
-def static_ham(params):
+def static_ham(params,rsd):
     Lcell = params.L
     try:
-        H = ss.load_npz(workpath+"Hstat_L{0}_K1_{1}_K2_{2}_J{3}_B{4}_rsd{5}.npz".format(Lcell,params.K1,params.K2,params.J,params.B,params.rsd))
+        H = ss.load_npz(workpath+"Hstat_L{0}_K1_{1}_K2_{2}_J{3}_B{4}_rsd{5}.npz".format(Lcell,params.K1,params.K2,params.J,params.B,rsd))
     except:
         Size = 4**Lcell
         H = ss.dok_matrix((Size,Size),dtype=complex) ## or 'c'
         try:
-            Kvalues = np.load(workpath+"Kvals_L{0}_K1_{1}_K2_{2}_rsd{3}.npy".format(Lcell,params.K1,params.K2,params.rsd))
+            Kvalues = np.load(workpath+"Kvals_L{0}_K1_{1}_K2_{2}_rsd{3}.npy".format(Lcell,params.K1,params.K2,rsd))
         except:
             Kvalues = np.random.uniform(params.K1,params.K2,(2,Lcell-1))*np.random.choice(np.array([-1.0,1.0]),(2,Lcell-1))
-            np.save(workpath+"Kvals_L{0}_K1_{1}_K2_{2}_rsd{3}.npy".format(Lcell,params.K1,params.K2,params.rsd),Kvalues)
+            np.save(workpath+"Kvals_L{0}_K1_{1}_K2_{2}_rsd{3}.npy".format(Lcell,params.K1,params.K2,rsd),Kvalues)
         try:
-            Jvalues = np.load(workpath+"Jvals_L{0}_J{1}_rsd{2}.npy".format(Lcell,params.J,params.rsd))
+            Jvalues = np.load(workpath+"Jvals_L{0}_J{1}_rsd{2}.npy".format(Lcell,params.J,rsd))
         except:
             Jvalues = np.random.uniform(-params.J,params.J,(2,Lcell))
-            np.save(workpath+"Jvals_L{0}_J{1}_rsd{2}.npy".format(Lcell,params.J,params.rsd),Jvalues)
+            np.save(workpath+"Jvals_L{0}_J{1}_rsd{2}.npy".format(Lcell,params.J,rsd),Jvalues)
         try:
-            fields = np.load(workpath+"Bvals_L{0}_B{1}_rsd{2}.npy".format(Lcell,params.B,params.rsd))
+            fields = np.load(workpath+"Bvals_L{0}_B{1}_rsd{2}.npy".format(Lcell,params.B,rsd))
         except:
             fields = np.random.uniform(-params.B,params.B,(3,2*Lcell))
-            np.save(workpath+"Bvals_L{0}_B{1}_rsd{2}.npy".format(Lcell,params.B,params.rsd),fields)
+            np.save(workpath+"Bvals_L{0}_B{1}_rsd{2}.npy".format(Lcell,params.B,rsd),fields)
         # constpiece = 0.5*np.pi + 0.25*np.pi/(1.0+np.sqrt(5.0)) # optional
         for state in range(Size):
             scfg = spinstr(state,2*Lcell)
             # H[state,state] -= constpiece # optional
-            # B fields and J couplings
             for siteA in range(2*Lcell):
                 spin = (2*int(scfg[siteA])-1)
                 # fields
@@ -180,11 +150,11 @@ def static_ham(params):
                     H[state,state] += Jvalues[1,cell]
                 else:
                     H[state,state] -= Jvalues[1,cell]
+                H[state^( 2**(2*Lcell-2*cell-1) + 2**(2*Lcell-2*cell-2) ),state] += Jvalues[0,cell]
                 if scfg[2*cell+1] == scfg[2*cell + 2]:
                     H[state,state] += Kvalues[1,cell]
                 else:
                     H[state,state] -= Kvalues[1,cell]
-                H[state^(2**(2*Lcell-2*cell-1)+2**(2*Lcell-2*cell-2)),state] += Jvalues[0,cell]
                 H[state^(2**(2*Lcell-2*cell-2)+2**(2*Lcell-2*cell-3)),state] += Kvalues[0,cell]
             # final cell
             if scfg[2*Lcell-2] == scfg[2*Lcell - 1]:
@@ -194,7 +164,7 @@ def static_ham(params):
             xxstate = state^3
             H[xxstate,state] += Jvalues[0,Lcell-1]
         H = ss.csr_matrix(H)
-        ss.save_npz(workpath+"Hstat_L{0}_K1_{1}_K2_{2}_J{3}_B{4}_rsd{5}.npz".format(Lcell,params.K1,params.K2,params.J,params.B,params.rsd),H)
+        ss.save_npz(workpath+"Hstat_L{0}_K1_{1}_K2_{2}_J{3}_B{4}_rsd{5}.npz".format(Lcell,params.K1,params.K2,params.J,params.B,rsd),H)
     return H
 
 
@@ -214,6 +184,7 @@ def pulse_ham_z(params):
                     Hdiag[state] -= 0.5
         np.save(workpath+"pulse_z_L{0}.npy".format(Lcell),Hdiag)
     return Hdiag
+
 
 # confirmed
 def pulse_ham_x(params):
@@ -236,8 +207,8 @@ def pulse_ham_x(params):
 # NOTE: for some reason, it's essential to have the extra "psimem" for performance
 def evo_state_RHS(t,y,params,Xp,Zp,Hs,psimem):
     psimem = -1j*Hs.dot(y)
-    psimem -= 1j*(pulse_func(t,2.0*np.pi,params.wid)/(1.0+params.pd))*Xp.dot(y)
-    psimem -= 1j*(pulse_func(t,4.0*np.pi/(1.0+np.sqrt(5.0)),params.wid)/(1.0+params.pd))*(Zp*y)
+    psimem -= 1j*(1.0-params.pd)*pulse_func(t,2.0*np.pi,params.wid)*Xp.dot(y)
+    psimem -= 1j*(1.0-params.pd)*pulse_func(t,4.0*np.pi/(1.0+np.sqrt(5.0)),params.wid)*(Zp*y)
     return psimem
 
 
@@ -249,10 +220,9 @@ rank = comm.Get_rank()
 if __name__=="__main__":
     
     parser = argparse.ArgumentParser(description='xxz random unitary spectral form factor', prog='main', usage='%(prog)s [options]')
-    parser.add_argument("-L", "--L", help="number of UNIT CELLS", default=5,type=int, nargs='?')
-    parser.add_argument("-rsd", "--rsd", help="disorder realization", default=0,type=int, nargs='?')
-    parser.add_argument("-nst", "--nst", help="number of init. states per realization", default=8,type=int, nargs='?')
+    parser.add_argument("-L", "--L", help="number of UNIT CELLS", default=7,type=int, nargs='?')
     parser.add_argument("-B", "--B", help="local field dist. width", default=0.0,type=float, nargs='?')
+    parser.add_argument("-rstart", "--rstart", help="disorder realization offset", default=0,type=int, nargs='?')
     parser.add_argument("-K2", "--K2", help="intercell coupling dist. width", default=0.3,type=float, nargs='?')
     parser.add_argument("-K1", "--K1", help="intercell coupling dist. width", default=0.1,type=float, nargs='?')
     parser.add_argument("-J", "--J", help="local random coupling dist. width", default=0.0,type=float, nargs='?')
@@ -292,22 +262,6 @@ if __name__=="__main__":
     comm.Bcast(tarray,root=0)
     
     if rank == 0:
-        todo = todolist(params)
-    else:
-        st = None
-    
-    if rank == 0:
-        st = todo[0]
-        for ind in range(1,3*params.nst):
-            tasknum = int(np.floor(ind/3))
-            comm.send(todo[tasknum],dest=ind)
-        tasknum = 0
-    else:
-        tasknum = int(np.floor(rank/3))
-        st = comm.recv(source=0)
-        
-    
-    if rank == 0:
         Zpulse = pulse_ham_z(params)
     else:
         Zpulse = np.empty(4**params.L,dtype=float)
@@ -319,29 +273,49 @@ if __name__=="__main__":
         Xpulse = None
     Xpulse = comm.bcast(Xpulse,root=0)
     
-    if rank == 0:
-        Hstatic = static_ham(params)
+    tasknum = int(np.floor(rank/3))
+    rsd = tasknum + params.rstart
+    
+    
+    st = None
+    Hstatic = None
+    
+    if rank == 3*tasknum:
+        data_names = workpath+"corrs_r_L{}_pd{}_wid{}_K1_{}_K2_{}_J{}_B{}_rsd{}_st*.npy".format(params.L,params.pd,params.wid,params.K1,params.K2,params.J,params.B,rsd)
+        flist = glob.glob(data_names)
+        if len(flist) > 0:
+            fname = flist[0]
+            st = int(fname[fname.find("_st")+3:fname.find(".npy")])
+        else:
+            np.random.seed(rsd)
+            st = np.random.choice(range(5,4**(params.L)-5))
+        for ind in range(3*tasknum+1,3*tasknum+3):
+            comm.send(st,dest=ind)
     else:
-        Hstatic = None
-    Hstatic = comm.bcast(Hstatic,root=0)
+        st = comm.recv(source=3*tasknum)
+        
     
-    ### RANK = 3*tasknum + c
-    ### c = 0 (root / regular psi) 1 (edge psi) 2 (bulk psi)
-    ### tasknum is position of state in todolist
+    if rank == 3*tasknum:
+        Hstatic = static_ham(params,rsd)
+        for ind in range(3*tasknum+1,3*tasknum+3):
+            comm.send(Hstatic,dest=ind)
+    else:
+        Hstatic = comm.recv(Hstatic,source=3*tasknum)
     
-    data_name = workpath+"corrs_{0}.npy".format(fhead(params,st))
+    
+    data_name = workpath+"corrs_r_{0}.npy".format(fhead(params,rsd,st))
     if rank%3 == 0:
         print("working on {0}th state with index {1} == {2}".format(tasknum,st,spinstr(st,2*params.L)))
         try:
             ts = ((np.load(data_name))[:,0]).tolist()
             ### find save state file for latest time within collected values (preferably at end)
-            ti = max([float(fname[fname.find("_time")+5:fname.find(".npy")]) for fname in glob.iglob(workpath+"psi_{0}_time*.npy".format(fhead(params,st))) if float(fname[fname.find("_time")+5:fname.find(".npy")]) <= max(ts)])
-            start_data = np.load(workpath+"psi_{0}_time{1}.npy".format(fhead(params,st),int(ti)))
+            ti = max([float(fname[fname.find("_time")+5:fname.find(".npy")]) for fname in glob.iglob(workpath+"psi_{0}_time*.npy".format(fhead(params,rsd,st))) if float(fname[fname.find("_time")+5:fname.find(".npy")]) <= max(ts)])
+            start_data = np.load(workpath+"psi_{0}_time{1}.npy".format(fhead(params,rsd,st),int(ti)))
             newL = ts.index(ti)
-            ts = ts[:newL + 1]
+            ts = ts[newL:]
             data_list = ((np.load(data_name))[:newL+1,:]).tolist()
         except (FileNotFoundError, IOError, EOFError, ValueError) as err:
-            print("FNF {0} for params={1}".format(err,fhead(params,st)))
+            print("FNF {0} for params={1}".format(err,fhead(params,rsd,st)))
             print("starting from time 0")
             ti = 0.0
             ts = []
@@ -379,7 +353,7 @@ if __name__=="__main__":
             data = np.zeros((numts,6))
         
             if tstart > 0.0:
-                start_data = np.load(workpath+"psi_{0}_time{1}.npy".format(fhead(params,st),int(tstart)))
+                start_data = np.load(workpath+"psi_{0}_time{1}.npy".format(fhead(params,rsd,st),int(tstart)))
             
             init_reg = start_data[0,:]
             
@@ -395,7 +369,7 @@ if __name__=="__main__":
             
             #### APPARENTLY Hstatic not defined
             psimem = np.zeros(4**params.L,dtype=complex)
-            sol_reg = sint.solve_ivp(evo_state_RHS,(teval[0],teval[-1]),init_reg,t_eval=teval,args=(params,Xpulse,Zpulse,Hstatic,psimem),max_step=params.wid,rtol=1e-6,atol=1e-8)
+            sol_reg = sint.solve_ivp(evo_state_RHS,(teval[0],teval[-1]),init_reg,t_eval=teval,args=(params,Xpulse,Zpulse,Hstatic,psimem),max_step=0.5*params.wid,rtol=1e-8,atol=1e-10)
             # times0 = sol_reg.t
             psis0 = sol_reg.y
         
@@ -406,7 +380,7 @@ if __name__=="__main__":
             edgemem = np.zeros(4**params.L,dtype=complex)
             comm.Recv(teval,source=3*tasknum)
             comm.Recv(init_edge,source=3*tasknum)
-            sol_edge = sint.solve_ivp(evo_state_RHS,(teval[0],teval[-1]),init_edge,t_eval=teval,args=(params,Xpulse,Zpulse,Hstatic,edgemem),max_step=params.wid,rtol=1e-6,atol=1e-8)
+            sol_edge = sint.solve_ivp(evo_state_RHS,(teval[0],teval[-1]),init_edge,t_eval=teval,args=(params,Xpulse,Zpulse,Hstatic,edgemem),max_step=0.5*params.wid,rtol=1e-8,atol=1e-10)
             # times1 = sol_edge.t
             psis1 = sol_edge.y
             comm.Send(psis1,dest=3*tasknum)
@@ -419,7 +393,7 @@ if __name__=="__main__":
             bulkmem = np.zeros(4**params.L,dtype=complex)
             comm.Recv(teval,source=3*tasknum)
             comm.Recv(init_bulk,source=3*tasknum)
-            sol_bulk = sint.solve_ivp(evo_state_RHS,(teval[0],teval[-1]),init_bulk,t_eval=teval,args=(params,Xpulse,Zpulse,Hstatic,bulkmem),max_step=params.wid,rtol=1e-6,atol=1e-8)
+            sol_bulk = sint.solve_ivp(evo_state_RHS,(teval[0],teval[-1]),init_bulk,t_eval=teval,args=(params,Xpulse,Zpulse,Hstatic,bulkmem),max_step=0.5*params.wid,rtol=1e-8,atol=1e-10)
             # times2 = sol_bulk.t
             psis2 = sol_bulk.y
             comm.Send(psis2,dest=3*tasknum)
@@ -452,11 +426,14 @@ if __name__=="__main__":
                 data[check,3] = (np.vdot(psis0[:,check],psimem)).real
                 
             data_list.extend(data.tolist())
-            np.save(workpath+"psi_{0}_time{1}.npy".format(fhead(params,st),int(tstop)),start_data)
+            np.save(workpath+"psi_{0}_time{1}.npy".format(fhead(params,rsd,st),int(tstop)),start_data)
             np.save(data_name,np.array(data_list))
     if rank%3 == 0:
         for tval in range(0,params.tf,int(np.ceil(params.maxint))):
-            os.system("rm ./psi_{0}_time{1}".format(fhead(params,st),tval))
+            try:
+                os.system("rm "+workpath+"psi_{0}_time{1}".format(fhead(params,rsd,st),tval))
+            except:
+                print("could not remove file for time {}".format(tval))
         
         
     ## at end:
