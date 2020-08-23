@@ -89,6 +89,21 @@ def Zall(params):
         np.save(workpath+"Z_all_L{0}.npy".format(Lcell),op)
     return op
 
+### confirmed, save as array
+def ZZall(params):
+    Lcell = params.L
+    try:
+        op = np.load(workpath+"ZZ_all_L{0}.npy".format(Lcell))
+    except:
+        Size = 4**Lcell
+        op = np.zeros((2*Lcell-1,Size),dtype=float)
+        for state in range(Size):
+            scfg = spinstr(state,2*Lcell)
+            for j in range(2*Lcell-1):
+                op[j,state] += (2.0*int(scfg[j])-1.0)*(2.0*int(scfg[j+1])-1.0)
+        np.save(workpath+"ZZ_all_L{0}.npy".format(Lcell),op)
+    return op
+
 ### confirmed save as array
 def Xop(params,j=0):
     Lcell = params.L
@@ -319,7 +334,7 @@ if __name__=="__main__":
         Hstatic = comm.recv(Hstatic,source=3*tasknum)
     print("Hamiltonian received for rank {}".format(rank))
     
-    data_name = workpath+"corrs_r_cd{}_{}.npy".format(params.cd,fhead(params,rsd,st))
+    data_name = workpath+"corrs_r1_cd{}_{}.npy".format(params.cd,fhead(params,rsd,st))
     
     if rank%3 == 0:
         # print("working on {0}th state with index {1} == {2}".format(tasknum,st,spinstr(st,2*params.L)))
@@ -344,6 +359,7 @@ if __name__=="__main__":
     
         # initial Z spin values, only root needs these (also data list and ts)
         Z0s = np.array([2*int((spinstr(st,2*params.L))[j])-1 for j in range(2*params.L)])
+        ZZ0s = np.array([(2*int((spinstr(st,2*params.L))[j])-1)*(2*int((spinstr(st,2*params.L))[j+1])-1) for j in range(2*params.L-1)])
         
         #### start time evolution:
         num_runs = int(np.ceil((params.tf-ti)/float(params.maxint)))
@@ -366,7 +382,7 @@ if __name__=="__main__":
             teval = np.array(sorted(list(set(teval.tolist())),key=float))
             # print("run {0} from t={1} to {2}, times to check = {3}".format(run,tstart,tstop,teval))
             numts = len(teval)
-            data = np.zeros((numts,4+2*params.L))
+            data = np.zeros((numts,3+4*params.L))
         
             if tstart > 0.0:
                 start_data = np.load(workpath+"psi_cd{}_{}_time{}.npy".format(params.cd,fhead(params,rsd,st),int(tstart)))
@@ -435,7 +451,13 @@ if __name__=="__main__":
                     Zop = Zops[j,:]
                     psimem = Zop*psis0[:,check]
                     data[check,4+j] = (Z0s[j]*np.vdot(psis0[:,check],psimem)).real
-
+                
+                Zops = ZZall(params)
+                for j2 in range(2*params.L-1):
+                    Zop = Zops[j2,:]
+                    psimem = Zop*psis0[:,check]
+                    data[check,4+2*params.L+j2] = (ZZ0s[j2]*np.vdot(psis0[:,check],psimem)).real
+                
                 psimem = (Xop(params,0)).dot(psis1[:,check])
                 data[check,2] = (np.vdot(psis0[:,check],psimem)).real
             

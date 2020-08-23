@@ -73,7 +73,7 @@ if __name__=="__main__":
     os.chdir(workpath)
     if cd_strength != 0.0:
         counter = True
-        data_names = "corrs_r_cd{}_L{}_pd{}_wid{}_K1_{}_K2_{}_J{}_B{}_rsd*_st*.npy".format(cd_strength,Lcell,pd,wid,Kval1,Kval2,Jval,Bval)
+        data_names = "corrs_r1_cd{}_L{}_pd{}_wid{}_K1_{}_K2_{}_J{}_B{}_rsd*_st*.npy".format(cd_strength,Lcell,pd,wid,Kval1,Kval2,Jval,Bval)
     else:
         counter = False
         data_names = "corrs_r_L{}_pd{}_wid{}_K1_{}_K2_{}_J{}_B{}_rsd*_st*.npy".format(Lcell,pd,wid,Kval1,Kval2,Jval,Bval)
@@ -123,11 +123,11 @@ if __name__=="__main__":
     scriptfile.write("\n#SBATCH --mail-type=end")
     scriptfile.write("\nexport MKL_NUM_THREADS=1")
     # scriptfile.write('\nexport OMP_NUM_THREADS={0}'.format(Ntasks)) ### for openMP, not MPI
-    if counter:
-        for foo in range(10):
-            scriptfile.write("\nibrun python3 /scratch/"+mainpath+"/qp_tevo_cd.py -L={0} -K1={1} -K2={2} -wid={3} -pd={4}  -B={5} -J={6} -maxint={7} -tf={8} -rstart={9} -cd={10}".format(Lcell,Kval1,Kval2,wid,pd,Bval,Jval,maxint,tmax,rstart+foo*ndis,cd_strength))
-    else:
-        scriptfile.write("\nibrun python3 /scratch/"+mainpath+"/qp_tevo.py -L={0} -K1={1} -K2={2} -wid={3} -pd={4}  -B={5} -J={6} -maxint={7} -tf={8} -rstart={9}".format(Lcell,Kval1,Kval2,wid,pd,Bval,Jval,maxint,tmax,rstart))
+    # if counter:
+    for foo in range(10):
+        scriptfile.write("\nibrun python3 /scratch/"+mainpath+"/qp_tevo_cd.py -L={0} -K1={1} -K2={2} -wid={3} -pd={4}  -B={5} -J={6} -maxint={7} -tf={8} -rstart={9} -cd={10}".format(Lcell,Kval1,Kval2,wid,pd,Bval,Jval,maxint,tmax,rstart+foo*ndis,cd_strength))
+    # else:
+        # scriptfile.write("\nibrun python3 /scratch/"+mainpath+"/qp_tevo.py -L={0} -K1={1} -K2={2} -wid={3} -pd={4}  -B={5} -J={6} -maxint={7} -tf={8} -rstart={9}".format(Lcell,Kval1,Kval2,wid,pd,Bval,Jval,maxint,tmax,rstart))
     scriptfile.write('\necho "job done"')
     scriptfile.close()
     os.system("chmod 700 "+scriptname)
